@@ -1,35 +1,54 @@
-import { Client, Users } from 'node-appwrite';
+import admin from "firebase-admin";
 
-// This Appwrite function will be executed every time your function is triggered
 export default async ({ req, res, log, error }) => {
-  // You can use the Appwrite SDK to interact with other services
-  // For this example, we're using the Users service
-  const client = new Client()
-    .setEndpoint(process.env.APPWRITE_FUNCTION_API_ENDPOINT)
-    .setProject(process.env.APPWRITE_FUNCTION_PROJECT_ID)
-    .setKey(req.headers['x-appwrite-key'] ?? '');
-  const users = new Users(client);
-
   try {
-    const response = await users.list();
-    // Log messages and errors to the Appwrite Console
-    // These logs won't be seen by your end users
-    log(`Total users: ${response.total}`);
-  } catch(err) {
-    error("Could not list users: " + err.message);
-  }
+    // Initialize Firebase Admin
+    if (!admin.apps.length) {
+      admin.initializeApp({
+        credential: admin.credential.cert({
+          projectId: process.env.FCM_PROJECT_ID,
+          clientEmail: process.env.FCM_CLIENT_EMAIL,
+          privateKey: process.env.FCM_PRIVATE_KEY.replace(/\\n/g, "\n"),
+        }),
+      });
+    }
 
-  // The req object contains the request data
-  if (req.path === "/ping") {
-    // Use res object to respond with text(), json(), or binary()
-    // Don't forget to return a response!
-    return res.text("Pong");
-  }
+    const body = JSON.parse(req.body || "{}");
 
-  return res.json({
-    motto: "Build like a team of hundreds_",
-    learn: "https://appwrite.io/docs",
-    connect: "https://appwrite.io/discord",
-    getInspired: "https://builtwith.appwrite.io",
-  });
+    const deviceToken = body.deviceToken;
+    const title = body.message?.title || "TravelLink South Sudan";
+    const messageBody = body.message?.body || "You have a new notification.";
+
+    if (!deviceToken) {
+      return res.json({
+        success: false,
+        message: "deviceToken is required"
+      }, 400);
+    }
+
+    const message = {
+      token: deviceToken,
+      notification: {
+        title: title,
+        body: messageBody
+      }
+    };
+
+    const response = await admin.messaging().send(message);
+
+    log("FCM message sent: " + response);
+
+    return res.json({
+      success: true,
+      messageId: response
+    });
+
+  } catch (err) {
+    error(err);
+
+    return res.json({
+      success: false,
+      error: err.message
+    }, 500);
+  }
 };
