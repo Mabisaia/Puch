@@ -1,19 +1,9 @@
 {
-  "name": "starter-template",
-  "version": "1.0.0",
-  "description": "",
-  "main": "src/main.js",
+  "name": "travellink-fcm-function",
   "type": "module",
-  "scripts": {
-    "format": "prettier --write ."
-  },
+  "main": "src/main.js",
   "dependencies": {
-    "node-appwrite": "^29.0.0"
-  },
-  "devDependencies": {
-    "prettier": "^3.2.5"
-  },
-  "engines": {
-    "node": ">=18.17.0"
+    "firebase-admin": "^13.10.0",
+    "node-appwrite": "^18.0.0"
   }
 }
