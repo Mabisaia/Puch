@@ -2,18 +2,26 @@ import admin from "firebase-admin";
 
 export default async ({ req, res, log, error }) => {
   try {
-    // Initialize Firebase Admin only once
     if (!admin.apps.length) {
+      const projectId = process.env.FCM_PROJECT_ID;
+      const clientEmail = process.env.FCM_CLIENT_EMAIL;
+      const privateKey = process.env.FCM_PRIVATE_KEY;
+
+      if (!projectId || !clientEmail || !privateKey) {
+        throw new Error(
+          "Missing FCM_PROJECT_ID, FCM_CLIENT_EMAIL, or FCM_PRIVATE_KEY"
+        );
+      }
+
       admin.initializeApp({
         credential: admin.credential.cert({
-          projectId: process.env.FCM_PROJECT_ID,
-          clientEmail: process.env.FCM_CLIENT_EMAIL,
-          privateKey: process.env.FCM_PRIVATE_KEY.replace(/\\n/g, "\n"),
+          projectId,
+          clientEmail,
+          privateKey: privateKey.replace(/\\n/g, "\n"),
         }),
       });
     }
 
-    // Appwrite already provides the parsed JSON object
     const body = req.bodyJson || {};
 
     const deviceToken = body.deviceToken;
@@ -21,7 +29,6 @@ export default async ({ req, res, log, error }) => {
     const messageBody =
       body.body || "You have a new notification.";
 
-    // Check for device token
     if (!deviceToken) {
       return res.json(
         {
@@ -32,11 +39,10 @@ export default async ({ req, res, log, error }) => {
       );
     }
 
-    // Create FCM message
     const message = {
       token: deviceToken,
       notification: {
-        title: title,
+        title,
         body: messageBody,
       },
       data: {
@@ -44,7 +50,6 @@ export default async ({ req, res, log, error }) => {
       },
     };
 
-    // Send notification
     const response = await admin.messaging().send(message);
 
     log("FCM message sent: " + response);
@@ -53,7 +58,6 @@ export default async ({ req, res, log, error }) => {
       success: true,
       messageId: response,
     });
-
   } catch (err) {
     error("FCM error: " + err.message);
 
