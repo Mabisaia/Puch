@@ -1,79 +1,83 @@
-import { Client, Messaging, ID } from "node-appwrite";
+import { Client, Databases, Messaging } from "node-appwrite";
 
 export default async ({ req, res, log, error }) => {
   try {
-    // Get the event payload
     let body = req.bodyJson;
 
-    // Safety: parse if Appwrite provides it as a string
+    // Appwrite may provide the body as a string
     if (typeof body === "string") {
       body = JSON.parse(body);
     }
 
-    log("Event body: " + JSON.stringify(body));
+    log("FULL EVENT: " + JSON.stringify(body));
 
-    // Database row data
-    const data = body?.data;
+    // Get the database row from the event
+    const row =
+      body?.data ||
+      body?.payload ||
+      body?.row ||
+      body?.data?.row;
 
-    if (!data) {
-      return res.json({
-        success: false,
-        error: "Database row data is missing from the event"
-      }, 400);
+    if (!row) {
+      throw new Error(
+        "Database row data is missing from the event. Event received: " +
+        JSON.stringify(body)
+      );
     }
 
-    // USERID is your Appwrite push target ID
-    const targetId = data?.USERID;
+    log("ROW DATA: " + JSON.stringify(row));
 
-    if (!targetId) {
-      return res.json({
-        success: false,
-        error: "USERID is missing from event.data"
-      }, 400);
+    // Get your columns
+    const userId = row.USERID;
+    const confirm = row.CONFIRM;
+
+    if (!userId) {
+      throw new Error("USERID is missing from the database row");
     }
 
-    // Only send when CONFIRM is true
-    if (data?.CONFIRM !== true) {
-      log("CONFIRM is not true. No notification sent.");
+    log("USERID: " + userId);
+    log("CONFIRM: " + confirm);
 
+    // Only send notification when CONFIRM is true
+    if (confirm !== true && confirm !== "true" && confirm !== 1) {
       return res.json({
         success: true,
-        message: "No notification required",
-        confirm: data?.CONFIRM
+        message: "CONFIRM is not true, no notification sent"
       });
     }
 
-    // Connect to Appwrite
+    // Appwrite client
     const client = new Client()
-      .setEndpoint(process.env.APPWRITE_FUNCTION_API_ENDPOINT)
-      .setProject(process.env.APPWRITE_FUNCTION_PROJECT_ID)
-      .setKey(process.env.APPWRITE_FUNCTION_API_KEY);
+      .setEndpoint(process.env.APPWRITE_ENDPOINT)
+      .setProject(process.env.APPWRITE_PROJECT_ID)
+      .setKey(process.env.APPWRITE_API_KEY);
 
     const messaging = new Messaging(client);
 
-    // Send push notification to the registered target
-    const message = await messaging.createPush({
-      messageId: ID.unique(),
-      title: "TravelLink",
-      body: "Your booking has been confirmed.",
-      targets: [targetId],
-      priority: "high"
-    });
+    // Send push notification using the Appwrite target/user ID
+    const result = await messaging.createPush(
+      "default",
+      "TravelLink",
+      "Your booking has been confirmed.",
+      [],
+      [],
+      [userId]
+    );
 
-    log("Push notification sent: " + JSON.stringify(message));
+    log("PUSH RESULT: " + JSON.stringify(result));
 
     return res.json({
       success: true,
-      targetId: targetId,
-      messageId: message.$id
+      message: "Notification sent",
+      userId: userId
     });
 
-  } catch (err) {
-    error("ERROR: " + err.message);
+  } catch (e) {
+    error(e.message);
 
     return res.json({
       success: false,
-      error: err.message
-    }, 500);
+      error: e.message
+    });
   }
 };
