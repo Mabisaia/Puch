@@ -1,4 +1,4 @@
-import { Client, Databases, Messaging } from "node-appwrite";
+import { Client, Messaging } from "node-appwrite";
 
 export default async ({ req, res, log, error }) => {
   try {
@@ -11,38 +11,30 @@ export default async ({ req, res, log, error }) => {
 
     log("FULL EVENT: " + JSON.stringify(body));
 
-    // Get the database row from the event
-    const row =
-      body?.data ||
-      body?.payload ||
-      body?.row ||
-      body?.data?.row;
+    // Your Appwrite event IS the database row
+    const row = body;
 
-    if (!row) {
+    if (!row || !row.USERID) {
       throw new Error(
-        "Database row data is missing from the event. Event received: " +
+        "Database row data or USERID is missing from the event. Event received: " +
         JSON.stringify(body)
       );
     }
 
     log("ROW DATA: " + JSON.stringify(row));
 
-    // Get your columns
     const userId = row.USERID;
-    const confirm = row.CONFIRM;
-
-    if (!userId) {
-      throw new Error("USERID is missing from the database row");
-    }
+    const confirm = String(row.CONFIRM);
 
     log("USERID: " + userId);
     log("CONFIRM: " + confirm);
 
-    // Only send notification when CONFIRM is true
-    if (confirm !== true && confirm !== "true" && confirm !== 1) {
+    // CONFIRM = 2 means booking confirmed
+    if (confirm !== "2") {
       return res.json({
         success: true,
-        message: "CONFIRM is not true, no notification sent"
+        message: "Booking is not confirmed, no notification sent",
+        confirm: confirm
       });
     }
 
@@ -54,7 +46,7 @@ export default async ({ req, res, log, error }) => {
 
     const messaging = new Messaging(client);
 
-    // Send push notification using the Appwrite target/user ID
+    // Send push notification to the Appwrite user target
     const result = await messaging.createPush(
       "default",
       "TravelLink",
@@ -69,11 +61,13 @@ export default async ({ req, res, log, error }) => {
     return res.json({
       success: true,
       message: "Notification sent",
-      userId: userId
+      userId: userId,
+      confirm: confirm,
+      pushResult: result
     });
 
   } catch (e) {
-    error(e.message);
+    error("FUNCTION ERROR: " + e.message);
 
     return res.json({
       success: false,
