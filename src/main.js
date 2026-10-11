@@ -12,7 +12,7 @@ export default async ({ req, res, log, error }) => {
       });
     }
 
-    const fcmToken = "THE_USER_FCM_TOKEN";
+    const fcmToken = body.deviceToken;
 
     const messageId = await admin.messaging().send({
       token: fcmToken,
