@@ -12,8 +12,20 @@ export default async ({ req, res, log, error }) => {
       });
     }
 
+    // Get JSON sent to the Appwrite Function
+    const body = req.bodyJson;
+
+    // Get the user's FCM token
     const fcmToken = body.deviceToken;
 
+    if (!fcmToken) {
+      return res.json({
+        success: false,
+        error: "deviceToken is missing",
+      }, 400);
+    }
+
+    // Send notification
     const messageId = await admin.messaging().send({
       token: fcmToken,
       notification: {
@@ -35,6 +47,6 @@ export default async ({ req, res, log, error }) => {
     return res.json({
       success: false,
       error: err.message,
-    });
+    }, 500);
   }
 };
