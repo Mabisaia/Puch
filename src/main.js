@@ -13,31 +13,34 @@ export default async ({ req, res, log, error }) => {
       });
     }
 
-    // Read the request body
-    const body = JSON.parse(req.body || "{}");
+    // Appwrite already provides the parsed JSON object
+    const body = req.bodyJson || {};
 
     const deviceToken = body.deviceToken;
-    const title = body.message?.title || "TravelLink South Sudan";
+    const title = body.title || "TravelLink South Sudan";
     const messageBody =
-      body.message?.body || "You have a new notification.";
+      body.body || "You have a new notification.";
 
     // Check for device token
     if (!deviceToken) {
       return res.json(
         {
           success: false,
-          message: "deviceToken is required",
+          error: "deviceToken is required",
         },
         400
       );
     }
 
-    // Create FCM notification
+    // Create FCM message
     const message = {
       token: deviceToken,
       notification: {
         title: title,
         body: messageBody,
+      },
+      data: {
+        type: String(body.type || "test"),
       },
     };
 
