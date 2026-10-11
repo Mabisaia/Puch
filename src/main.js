@@ -12,24 +12,34 @@ export default async ({ req, res, log, error }) => {
 
     log("Event body: " + JSON.stringify(body));
 
+    // Database row data
+    const data = body?.data;
+
+    if (!data) {
+      return res.json({
+        success: false,
+        error: "Database row data is missing from the event"
+      }, 400);
+    }
+
     // USERID is your Appwrite push target ID
-    const targetId = body?.USERID;
+    const targetId = data?.USERID;
 
     if (!targetId) {
       return res.json({
         success: false,
-        error: "USERID is missing from the event",
+        error: "USERID is missing from event.data"
       }, 400);
     }
 
     // Only send when CONFIRM is true
-    if (body?.CONFIRM !== true) {
+    if (data?.CONFIRM !== true) {
       log("CONFIRM is not true. No notification sent.");
 
       return res.json({
         success: true,
         message: "No notification required",
-        confirm: body?.CONFIRM
+        confirm: data?.CONFIRM
       });
     }
 
