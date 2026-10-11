@@ -4,32 +4,32 @@ export default async ({ req, res, log, error }) => {
   try {
     let body = req.bodyJson;
 
-    // Appwrite may provide the body as a string
     if (typeof body === "string") {
       body = JSON.parse(body);
     }
 
     log("FULL EVENT: " + JSON.stringify(body));
 
-    // Your Appwrite event IS the database row
+    if (!body) {
+      throw new Error("Event body is missing");
+    }
+
     const row = body;
 
-    if (!row || !row.USERID) {
+    if (!row.USERID) {
       throw new Error(
-        "Database row data or USERID is missing from the event. Event received: " +
+        "USERID is missing from the database row. Event received: " +
         JSON.stringify(body)
       );
     }
 
-    log("ROW DATA: " + JSON.stringify(row));
-
-    const userId = row.USERID;
-    const confirm = String(row.CONFIRM);
+    const userId = String(row.USERID);
+    const confirm = String(row.CONFIRM ?? "");
 
     log("USERID: " + userId);
     log("CONFIRM: " + confirm);
 
-    // CONFIRM = 2 means booking confirmed
+    // Only send when CONFIRM = 2
     if (confirm !== "2") {
       return res.json({
         success: true,
@@ -46,15 +46,13 @@ export default async ({ req, res, log, error }) => {
 
     const messaging = new Messaging(client);
 
-    // Send push notification to the Appwrite user target
-    const result = await messaging.createPush(
-      "default",
-      "TravelLink",
-      "Your booking has been confirmed.",
-      [],
-      [],
-      [userId]
-    );
+    // Create push notification
+    const result = await messaging.createPush({
+      messageId: "booking-confirmed-" + Date.now(),
+      title: "TravelLink",
+      body: "Your booking has been confirmed.",
+      targets: [userId]
+    });
 
     log("PUSH RESULT: " + JSON.stringify(result));
 
