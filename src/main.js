@@ -2,20 +2,39 @@ import admin from "firebase-admin";
 
 export default async ({ req, res, log, error }) => {
   try {
-    log("REQUEST BODY: " + JSON.stringify(req.bodyJson));
-    log("REQUEST HEADERS: " + JSON.stringify(req.headers));
+    if (!admin.apps.length) {
+      admin.initializeApp({
+        credential: admin.credential.cert({
+          projectId: process.env.FCM_PROJECT_ID,
+          clientEmail: process.env.FCM_CLIENT_EMAIL,
+          privateKey: process.env.FCM_PRIVATE_KEY.replace(/\\n/g, "\n"),
+        }),
+      });
+    }
+
+    const fcmToken = "THE_USER_FCM_TOKEN";
+
+    const messageId = await admin.messaging().send({
+      token: fcmToken,
+      notification: {
+        title: "TravelLink",
+        body: "Your booking has been confirmed.",
+      },
+    });
+
+    log(`Notification sent: ${messageId}`);
 
     return res.json({
       success: true,
-      received: req.bodyJson || null
+      messageId: messageId,
     });
 
   } catch (err) {
-    error("Error: " + err.message);
+    error(err);
 
     return res.json({
       success: false,
-      error: err.message
-    }, 500);
+      error: err.message,
+    });
   }
 };
