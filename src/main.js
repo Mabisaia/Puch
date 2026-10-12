@@ -16,18 +16,24 @@ export default async ({ req, res, log, error }) => {
 
     const row = body;
 
-    if (!row.USERID) {
+    // Check USERID
+    if (row.USERID === undefined || row.USERID === null) {
       throw new Error(
         "USERID is missing from the database row. Event received: " +
         JSON.stringify(body)
       );
     }
 
-    const userId = String(row.USERID);
-    const confirm = String(row.CONFIRM ?? "");
+    const userId = String(row.USERID).trim();
+    const confirm = String(row.CONFIRM ?? "").trim();
 
-    log("USERID: " + userId);
-    log("CONFIRM: " + confirm);
+    log("USERID: " + JSON.stringify(userId));
+    log("USERID TYPE: " + typeof userId);
+    log("CONFIRM: " + JSON.stringify(confirm));
+
+    if (!userId) {
+      throw new Error("USERID is empty");
+    }
 
     // Only send when CONFIRM = 2
     if (confirm !== "2") {
@@ -45,6 +51,8 @@ export default async ({ req, res, log, error }) => {
       .setKey(process.env.APPWRITE_API_KEY);
 
     const messaging = new Messaging(client);
+
+    log("Sending push to Appwrite Target ID: " + userId);
 
     // Create push notification
     const result = await messaging.createPush({
@@ -65,11 +73,11 @@ export default async ({ req, res, log, error }) => {
     });
 
   } catch (e) {
-    error("FUNCTION ERROR: " + e.message);
+    error("FUNCTION ERROR: " + (e?.message || String(e)));
 
     return res.json({
       success: false,
-      error: e.message
+      error: e?.message || String(e)
     });
   }
 };
