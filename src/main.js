@@ -1,7 +1,6 @@
-import { Client, Messaging } from "node-appwrite";
-
 export default async ({ req, res, log, error }) => {
   try {
+    // 1. Read the Appwrite event
     let body = req.bodyJson;
 
     if (typeof body === "string") {
@@ -10,74 +9,112 @@ export default async ({ req, res, log, error }) => {
 
     log("FULL EVENT: " + JSON.stringify(body));
 
-    if (!body) {
-      throw new Error("Event body is missing");
+    if (!body || typeof body !== "object") {
+      throw new Error("Event body is missing or invalid");
     }
 
+    // The event contains the database row directly
     const row = body;
 
-    // Check USERID
-    if (row.USERID === undefined || row.USERID === null) {
-      throw new Error(
-        "USERID is missing from the database row. Event received: " +
-        JSON.stringify(body)
-      );
-    }
-
-    const userId = String(row.USERID).trim();
+    // 2. Get the target ID and confirmation status
+    const targetId = String(row.USERID ?? "").trim();
     const confirm = String(row.CONFIRM ?? "").trim();
 
-    log("USERID: " + JSON.stringify(userId));
-    log("USERID TYPE: " + typeof userId);
-    log("CONFIRM: " + JSON.stringify(confirm));
+    log("TARGET ID: " + targetId);
+    log("CONFIRM: " + confirm);
 
-    if (!userId) {
-      throw new Error("USERID is empty");
+    if (!targetId) {
+      throw new Error("USERID is missing from the database row");
     }
 
-    // Only send when CONFIRM = 2
+    // 3. Send notification only when CONFIRM = 2
     if (confirm !== "2") {
       return res.json({
         success: true,
-        message: "Booking is not confirmed, no notification sent",
+        message: "Booking is not confirmed; no notification sent",
         confirm: confirm
       });
     }
 
-    // Appwrite client
-    const client = new Client()
-      .setEndpoint(process.env.APPWRITE_ENDPOINT)
-      .setProject(process.env.APPWRITE_PROJECT_ID)
-      .setKey(process.env.APPWRITE_API_KEY);
+    // 4. Read Appwrite environment variables
+    const endpoint = process.env.APPWRITE_ENDPOINT;
+    const projectId = process.env.APPWRITE_PROJECT_ID;
+    const apiKey = process.env.APPWRITE_API_KEY;
 
-    const messaging = new Messaging(client);
+    if (!endpoint || !projectId || !apiKey) {
+      throw new Error(
+        "Missing APPWRITE_ENDPOINT, APPWRITE_PROJECT_ID, or APPWRITE_API_KEY"
+      );
+    }
 
-    log("Sending push to Appwrite Target ID: " + userId);
+    // Support endpoints with or without /v1
+    const cleanEndpoint = endpoint.replace(/\/+$/, "");
+    const apiEndpoint = cleanEndpoint.endsWith("/v1")
+      ? cleanEndpoint
+      : cleanEndpoint + "/v1";
 
-    // Create push notification
-    const result = await messaging.createPush({
-      messageId: "booking-confirmed-" + Date.now(),
-      title: "TravelLink",
-      body: "Your booking has been confirmed.",
-      targets: [userId]
-    });
+    // 5. Create the push notification through REST
+    const messageId = "booking-confirmed-" + Date.now();
 
-    log("PUSH RESULT: " + JSON.stringify(result));
+    const response = await fetch(
+      apiEndpoint + "/messaging/messages/push",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "application/json",
+          "X-Appwrite-Project": projectId,
+          "X-Appwrite-Key": apiKey
+        },
+        body: JSON.stringify({
+          messageId: messageId,
+          title: "TravelLink",
+          body: "Your booking has been confirmed.",
+          targets: [targetId]
+        })
+      }
+    );
 
+    // 6. Read Appwrite's actual response
+    const responseText = await response.text();
+
+    let result;
+
+    try {
+      result = JSON.parse(responseText);
+    } catch {
+      result = { rawResponse: responseText };
+    }
+
+    log("APPWRITE HTTP STATUS: " + response.status);
+    log("APPWRITE PUSH RESPONSE: " + JSON.stringify(result));
+
+    if (!response.ok) {
+      throw new Error(
+        "Appwrite Messaging HTTP " +
+        response.status +
+        ": " +
+        (result.message || responseText)
+      );
+    }
+
+    // 7. Return success
     return res.json({
       success: true,
-      message: "Notification sent",
-      userId: userId,
+      message: "Push notification request accepted by Appwrite",
+      targetId: targetId,
       confirm: confirm,
       pushResult: result
     });
 
   } catch (e) {
-    error("FUNCTION ERROR: " + (e?.message || String(e)));
+    const message = e?.message || String(e);
+
+    error("FUNCTION ERROR: " + message);
 
     return res.json({
       success: false,
-      error: e?.message || String(e)
+      error: message
     });
   }
 };
